@@ -51,8 +51,12 @@ async function register(port: number): Promise<void> {
         body: JSON.stringify({ port }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      if (res.status === 200 || res.status === 409) return;
+      if ((res.status >= 200 && res.status < 300) || res.status === 409) {
+        process.stdout.write(`[entry] register answered HTTP ${res.status}\n`);
+        return;
+      }
       if (res.status === 400 || res.status === 405) throw new Error(`register answered HTTP ${res.status}: ${await res.text()}`);
+      process.stderr.write(`[entry] register answered HTTP ${res.status}; retrying\n`);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('register answered HTTP ')) throw err;
     }
