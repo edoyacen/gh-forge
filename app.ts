@@ -69,6 +69,7 @@ interface FileEntry {
 }
 
 interface Label {
+  id: number;
   name: string;
   color: string;
 }
@@ -457,8 +458,14 @@ function splitPath(pathname: string): string[] {
 // REST v3 serializers.
 
 function labelJson(repo: Repo, name: string): Record<string, unknown> {
-  const label = repo.labels.get(name);
-  return { id: allocateId(), name, color: label?.color ?? 'ededed', description: null };
+  let label = repo.labels.get(name);
+  if (label === undefined) {
+    // A label referenced without ever being created still needs a stable id, so mint (and keep)
+    // one now instead of a fresh id on every read.
+    label = { id: allocateId(), name, color: 'ededed' };
+    repo.labels.set(name, label);
+  }
+  return { id: label.id, name, color: label.color, description: null };
 }
 
 function issueJson(repo: Repo, issue: Issue): Record<string, unknown> {
@@ -883,12 +890,13 @@ async function handleRest(ctx: RestContext): Promise<void> {
         return;
       }
       const color = str(body.color, 'ededed');
-      repo.labels.set(name, { name, color });
-      sendJsonR(res, 201, { id: allocateId(), name, color, description: null });
+      const label: Label = { id: allocateId(), name, color };
+      repo.labels.set(name, label);
+      sendJsonR(res, 201, { id: label.id, name, color, description: null });
       return;
     }
     if (method === 'GET') {
-      sendJsonR(res, 200, [...repo.labels.values()].map((label) => ({ id: allocateId(), name: label.name, color: label.color })));
+      sendJsonR(res, 200, [...repo.labels.values()].map((label) => ({ id: label.id, name: label.name, color: label.color, description: null })));
       return;
     }
   }

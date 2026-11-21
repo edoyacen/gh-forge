@@ -59,6 +59,8 @@ async function register(port: number): Promise<void> {
         return;
       }
       if (res.status === 400 || res.status === 405) throw new Error(`register answered HTTP ${res.status}: ${await res.text()}`);
+      // Drain the body of a retryable answer so the socket can be reused on the next attempt.
+      await res.text().catch(() => '');
       process.stderr.write(`[entry] register answered HTTP ${res.status}; retrying\n`);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('register answered HTTP ')) throw err;
@@ -72,13 +74,16 @@ async function waitForDone(): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       // Ask for JSON explicitly so a misconfigured env can't hand us an HTML page.
-    const res = await fetch(`${ENV_URL}/done`, {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
+      const res = await fetch(`${ENV_URL}/done`, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
       if (res.ok) {
         const body = (await res.json()) as { done?: unknown };
         if (body.done === true) return;
+      } else {
+        // Drain the body of a failed poll so the socket can be reused; it is simply retried.
+        await res.text();
       }
     } catch {
       // The env is not answering yet, or the poll timed out: it is not done, so poll again.
