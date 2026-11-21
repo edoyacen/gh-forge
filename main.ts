@@ -32,7 +32,8 @@ const RETRY_MAX_MS = 2_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The wait after `attempt` failed requests: exponential from RETRY_INITIAL_MS, capped. */
+/** The wait after `attempt` failed requests: exponential from RETRY_INITIAL_MS, capped.
+ * attempt 0 delays 250ms, 1 -> 500ms, 2 -> 1s, 3+ -> 2s; the loop never gives up. */
 function retryDelay(attempt: number): number {
   return Math.min(RETRY_MAX_MS, RETRY_INITIAL_MS * 2 ** Math.min(attempt, 8));
 }
@@ -44,6 +45,8 @@ function retryDelay(attempt: number): number {
  */
 async function register(port: number): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
+    // 409 means another entry already registered: a first-register-wins race this process lost.
+    // Network errors and 5xx are retried because the env may still be booting.
     try {
       const res = await fetch(`${ENV_URL}/register`, {
         method: 'POST',
