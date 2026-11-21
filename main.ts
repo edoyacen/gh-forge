@@ -45,6 +45,8 @@ function retryDelay(attempt: number): number {
  */
 async function register(port: number): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
+    // 409 means another entry already registered: a first-register-wins race this process lost.
+    // Network errors and 5xx are retried because the env may still be booting.
     try {
       const res = await fetch(`${ENV_URL}/register`, {
         method: 'POST',
